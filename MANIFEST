@@ -1,0 +1,8 @@
+Changes
+MANIFEST
+Makefile.PL
+README
+lib/R/Comment2DocDraft.pm
+bin/r-comment2docdraft
+t/00-load.t
+META.yml                                 Module meta-data (added by MakeMaker)

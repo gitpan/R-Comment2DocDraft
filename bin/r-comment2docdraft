@@ -1,0 +1,13 @@
+#!/usr/bin/perl
+
+use R::Comment2DocDraft;
+use strict;
+
+my $dir = shift(@ARGV);
+
+unless ( -d $dir or -f $dir ) {
+    die "'$dir' should be a dir or a file.\n";
+}
+
+R::Comment2DocDraft->draft($dir, @ARGV);
+
