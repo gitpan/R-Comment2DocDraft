@@ -5,4 +5,5 @@ README
 lib/R/Comment2DocDraft.pm
 bin/r-comment2docdraft
 t/00-load.t
-META.yml                                 Module meta-data (added by MakeMaker)
+META.yml                                 Module YAML meta-data (added by MakeMaker)
+META.json                                Module JSON meta-data (added by MakeMaker)

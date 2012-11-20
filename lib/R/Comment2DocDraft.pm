@@ -4,10 +4,10 @@ use strict;
 use English;
 use File::Temp qw(tempfile);
 
-our $VERSION = 0.1;
-our %global = ("author" => "Someone <name\@site.com>",);
+our $VERSION = 0.2;
+our %global;
 
-our %necessary_fields = ("title"     => 1,
+our %necessary_fields = ("title" => 1,
                             );
 
 our %fields_type = ("title"       => \&parse_paragraph,
@@ -33,7 +33,7 @@ our %synonyms = ("desc"       => "description",
                  "values"     => "value",
                  "reference"  => "references",
                  "detail"     => "details",
-                   );
+                );
 
 our @available_section = qw(name        alias   docType   title 
                             description usage   arguments details   
@@ -49,10 +49,10 @@ sub draft {
     
     # find all the R script
     my @r_files;
-    if( -f $dir) {
+    if( -f $dir) {   # if only an R script
         @r_files = ($dir);
     } 
-    elsif(-d $dir) {
+    elsif(-d $dir) {    # if it is a dir
         @r_files = glob("$dir/*.R");
     } 
     else {
@@ -72,7 +72,10 @@ sub draft {
     close $R_MERGE_FH;
     
     print "R scripts are merged into $r_merge_filename\n";
-    print "Convert the comment\n";
+    print "Now convert the comments\n";
+	
+	# $data is a array reference in which each element
+	# is a hash reference storing sections in the comment
     my $data = parse($r_merge_filename);
     
     print "remove temp files ($r_merge_filename)\n";
@@ -88,19 +91,19 @@ sub generate {
     
     (-d "man") or mkdir("man");
 
-
     for(my $i = 0; $i < scalar(@$draft); $i ++) {
         my $current = $draft->[$i];
         my $function_name = $current->{function_name};
         $function_name ||= $current->{name};
         if(-e "man/$function_name.rd") {
-            print "- man/$function_name.rd already exists, update\n";
+            print "- man/$function_name.rd... update\n";
             my $old = read_section("man/$function_name.rd");
-            update_doc($current, $old);
+            %$current = (%$old, %$current);
+			create_doc($current);
         } 
         else {
         
-            print "- generate man/$function_name.rd\n";
+            print "- generate man/$function_name.rd...\n";
             create_doc($current);
        }
         
@@ -138,18 +141,31 @@ sub create_doc {
             }
         }
        }
-       print MAN "\\example{\n";
-       print MAN "# your example code here\n";
-       print MAN "}\n";
        close MAN;
 }
 
 sub read_section {
-    return {};
-}
+    open F, $_[0];
 
-sub update_doc {
-    create_doc(@_);
+	my $text = join "", <F>;
+
+	my $m;
+	$m = qr/
+			\{
+			  (?:
+				[^{}]+
+			   |
+				 (?:(??{$m}))
+			   )*
+			 \}
+			/x;
+
+	my @a = $text =~ /\\(\w+)\s*($m)/gms;
+	close F;
+	foreach (values @a) {
+		s/^\{|}$//g;
+	}
+	return {@a};
 }
 
 sub format_text {
@@ -177,7 +193,10 @@ sub format_p {
     my $new_text = " " x (length($prefix_space) - 1);
     my $current_width = length($prefix_space) - 1;
     foreach my $word (@words) {
-        if($current_width + length($word) + 1 > $max_width - 5) {
+		if(length($prefix_space) - 1 + length($word) + 1 > $max_width - 5) {
+			$new_text .= " $word";
+		}
+        elsif($current_width + length($word) + 1 > $max_width - 5) {
             $new_text .= "\n$prefix_space$word";
             $current_width = length($prefix_space) + length($word) + 1;
         } else {
@@ -197,14 +216,14 @@ sub parse {
     # each element in @$draft is data containing doc and function
     my $draft = [];
 
-    open my $R_FH, $_[0] or die "cannot open temperary file.\n";
-
+    open my $R_FH, $_[0] or die $@;
+	
     while(my $line = <$R_FH>) {
         
         # if the function has a doc, the comment must start with title
         
         if($line =~/^#title:/i or $line =~/^# {2, }title:/i) {
-            warn "Title section should formatted as '# title:'\n";
+            warn "Title section should be formatted as '# title:'\n  $line";
         }
         if($line =~/^# title:/) {
             $line =~s/^# //;
@@ -214,11 +233,11 @@ sub parse {
                 # comment should be in one block
                 unless($line =~/^#/) {
                     last;
-                    }
+                }
                 $line =~s/^# //;
                 $line =~s/^#//;
                 $current_comment .= $line;
-               }
+            }
             
             # convert code to \link{} or \code{}
             $current_comment = trans_code($current_comment);
@@ -252,7 +271,7 @@ sub parse {
                                 $function_args .= substr($line, 0, $closing_position);
                                 last;
                             }
-                            $function_args .= $line;
+                            $function_args .= " " x (length($function_name)+3) . $line;
                         }
                     }
                     $function_args = $function_args;
@@ -275,7 +294,7 @@ sub parse {
 			}
              foreach (keys %global) {
                 $draft->[$#$draft]->{$_} = $global{$_};
-             }
+            }
         }
     }
     return $draft;
@@ -326,7 +345,6 @@ sub parse_comment {
             }
         }
     }
-    
     
     foreach (keys %necessary_fields) {
         if(!defined($res->{$_})) {
